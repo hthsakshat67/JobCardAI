@@ -1,28 +1,26 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const sections = [...document.querySelectorAll('.page-section')];
-  const navButtons = [...document.querySelectorAll('[data-page]')];
-  const crumb = document.querySelector('#page-crumb');
-  const toast = document.querySelector('#toast');
+  const marketing = document.querySelector('#marketing-shell'); const auth = document.querySelector('#auth-shell'); const app = document.querySelector('#app-shell');
+  const sections = [...document.querySelectorAll('.page-section')]; const navButtons = [...document.querySelectorAll('[data-page]')]; const crumb = document.querySelector('#page-crumb'); const toast = document.querySelector('#toast');
   const names = { dashboard: 'Dashboard', editor: 'Create job card', jobs: 'Job cards', history: 'Job history', templates: 'Templates', pricing: 'Plans & billing', settings: 'Settings' };
-  function refreshIcons() { if (window.lucide) lucide.createIcons(); }
-  function showPage(id) {
-    sections.forEach(section => section.classList.toggle('active', section.id === id));
-    document.querySelectorAll('.nav-item').forEach(button => button.classList.toggle('active', button.dataset.page === id || (id === 'editor' && button.dataset.page === 'jobs')));
-    crumb.textContent = names[id] || 'Dashboard';
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    document.querySelector('.sidebar')?.classList.remove('open');
-    refreshIcons();
-  }
+  const icons = () => window.lucide?.createIcons();
+  const showToast = message => { if (!toast) return; toast.textContent = message; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 2600); };
+  function showPage(id) { sections.forEach(section => section.classList.toggle('active', section.id === id)); document.querySelectorAll('.nav-item').forEach(button => button.classList.toggle('active', button.dataset.page === id || (id === 'editor' && button.dataset.page === 'jobs'))); if (crumb) crumb.textContent = names[id] || 'Dashboard'; window.scrollTo({ top: 0, behavior: 'smooth' }); document.querySelector('.sidebar')?.classList.remove('open'); icons(); }
   navButtons.forEach(button => button.addEventListener('click', () => showPage(button.dataset.page)));
   document.querySelector('.mobile-menu')?.addEventListener('click', () => document.querySelector('.sidebar')?.classList.toggle('open'));
-  function showToast(message) { toast.textContent = message; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 2600); }
-  document.querySelector('#save-job')?.addEventListener('click', (event) => { event.preventDefault(); const form = document.querySelector('#job-form'); if (form.reportValidity()) showToast('Job card saved successfully'); });
+  document.querySelector('#save-job')?.addEventListener('click', event => { event.preventDefault(); const form = document.querySelector('#job-form'); if (form.reportValidity()) showToast('Job card saved successfully'); });
   document.querySelector('#save-settings')?.addEventListener('click', () => showToast('Workspace settings saved'));
-  const title = document.querySelector('input[placeholder*="Annual HVAC"]');
-  const customer = document.querySelector('input[placeholder*="Brightline"]');
-  const summary = document.querySelector('textarea[placeholder*="concise"]');
-  title?.addEventListener('input', e => document.querySelector('#preview-title').textContent = e.target.value || 'Annual HVAC maintenance');
-  customer?.addEventListener('input', e => document.querySelector('#preview-customer').textContent = e.target.value || 'Customer name');
-  summary?.addEventListener('input', e => document.querySelector('#preview-summary').textContent = e.target.value || 'Your work summary will appear here once you start typing.');
-  refreshIcons();
+  const title = document.querySelector('input[placeholder*="Annual HVAC"]'); const customer = document.querySelector('input[placeholder*="Brightline"]'); const summary = document.querySelector('textarea[placeholder*="concise"]');
+  title?.addEventListener('input', e => document.querySelector('#preview-title').textContent = e.target.value || 'Annual HVAC maintenance'); customer?.addEventListener('input', e => document.querySelector('#preview-customer').textContent = e.target.value || 'Customer name'); summary?.addEventListener('input', e => document.querySelector('#preview-summary').textContent = e.target.value || 'Your work summary will appear here once you start typing.');
+  const setMessage = (id, value = '') => { const el = document.querySelector(`#${id}`); if (el) el.textContent = value; };
+  const emailStep = document.querySelector('#email-step'); const otpStep = document.querySelector('#otp-step'); const emailInput = document.querySelector('#email'); const otpInput = document.querySelector('#otp'); let pendingEmail = ''; let resendTimer;
+  async function api(path, options = {}) { const response = await fetch(path, { ...options, headers: { 'content-type': 'application/json', ...(options.headers || {}) } }); const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || 'Something went wrong.'); return data; }
+  function startResendTimer(seconds = 60) { const button = document.querySelector('#resend-code'); const timer = document.querySelector('#resend-timer'); clearInterval(resendTimer); button.disabled = true; let left = seconds; timer.textContent = `(${left}s)`; resendTimer = setInterval(() => { left -= 1; timer.textContent = left > 0 ? `(${left}s)` : ''; if (left <= 0) { clearInterval(resendTimer); button.disabled = false; } }, 1000); }
+  async function requestOtp() { const email = emailInput.value.trim().toLowerCase(); setMessage('email-message'); try { const data = await api('/api/auth/request-otp', { method: 'POST', body: JSON.stringify({ email }) }); pendingEmail = data.email; document.querySelector('#sent-email').textContent = pendingEmail; emailStep.hidden = true; otpStep.hidden = false; otpInput.focus(); startResendTimer(); if (data.previewMode) setMessage('otp-message', 'Email delivery is in preview mode. Configure Resend before publishing.'); } catch (error) { setMessage('email-message', error.message); } }
+  document.querySelector('#email-form')?.addEventListener('submit', event => { event.preventDefault(); requestOtp(); });
+  document.querySelector('#otp-form')?.addEventListener('submit', async event => { event.preventDefault(); setMessage('otp-message'); try { const data = await api('/api/auth/verify-otp', { method: 'POST', body: JSON.stringify({ email: pendingEmail, code: otpInput.value.trim() }) }); if (data.ok) { location.hash = '#app'; route(); } } catch (error) { setMessage('otp-message', error.message); } });
+  document.querySelector('#change-email')?.addEventListener('click', () => { clearInterval(resendTimer); otpStep.hidden = true; emailStep.hidden = false; setMessage('email-message'); emailInput.focus(); });
+  document.querySelector('#resend-code')?.addEventListener('click', requestOtp);
+  async function route() { const hash = location.hash || '#home'; let authenticated = false; try { authenticated = (await api('/api/auth/me')).authenticated; } catch {} if (hash.startsWith('#app')) { if (!authenticated) { location.hash = '#login'; return route(); } marketing.hidden = true; auth.hidden = true; app.classList.add('is-visible'); showPage('dashboard'); return; } app.classList.remove('is-visible'); if (hash.startsWith('#login')) { marketing.hidden = true; auth.hidden = false; } else { auth.hidden = true; marketing.hidden = false; document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el)); } icons(); }
+  const revealObserver = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add('in-view'); }), { threshold: .14 });
+  window.addEventListener('hashchange', route); route(); icons();
 });

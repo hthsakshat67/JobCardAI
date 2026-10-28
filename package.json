@@ -1,0 +1,9 @@
+{
+  "name": "jobcard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "JobCard service operations workspace",
+  "type": "module",
+  "scripts": {"start": "node server.js", "dev": "node --watch server.js"},
+  "engines": {"node": ">=20"}
+}
