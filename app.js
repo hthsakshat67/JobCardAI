@@ -4,6 +4,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const names = { dashboard: 'Dashboard', editor: 'Create job card', jobs: 'Job cards', history: 'Job history', templates: 'Templates', pricing: 'Plans & billing', settings: 'Settings' };
   const icons = () => window.lucide?.createIcons();
   const showToast = message => { if (!toast) return; toast.textContent = message; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 2600); };
+  function applyIdentity(email) {
+    const local = String(email || 'operator').split('@')[0].replace(/[._-]+/g, ' ').trim();
+    const first = local.split(' ')[0] || 'Operator';
+    const display = local.split(' ').map(part => part ? part[0].toUpperCase() + part.slice(1).toLowerCase() : '').join(' ');
+    const initials = display.split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase();
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(node => { if (!node.nodeValue.trim()) return; node.nodeValue = node.nodeValue.replaceAll('Alex Carter', display).replaceAll('Alex', first).replaceAll('AC', initials); });
+    document.querySelectorAll('input[placeholder="Technician"]').forEach(input => input.value = display);
+    document.title = `${display} · JobCard`;
+  }
   function showPage(id) { sections.forEach(section => section.classList.toggle('active', section.id === id)); document.querySelectorAll('.nav-item').forEach(button => button.classList.toggle('active', button.dataset.page === id || (id === 'editor' && button.dataset.page === 'jobs'))); if (crumb) crumb.textContent = names[id] || 'Dashboard'; window.scrollTo({ top: 0, behavior: 'smooth' }); document.querySelector('.sidebar')?.classList.remove('open'); icons(); }
   navButtons.forEach(button => button.addEventListener('click', () => showPage(button.dataset.page)));
   document.querySelector('.mobile-menu')?.addEventListener('click', () => document.querySelector('.sidebar')?.classList.toggle('open'));
@@ -20,7 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelector('#otp-form')?.addEventListener('submit', async event => { event.preventDefault(); setMessage('otp-message'); try { const data = await api('/api/auth/verify-otp', { method: 'POST', body: JSON.stringify({ email: pendingEmail, code: otpInput.value.trim() }) }); if (data.ok) { location.hash = '#app'; route(); } } catch (error) { setMessage('otp-message', error.message); } });
   document.querySelector('#change-email')?.addEventListener('click', () => { clearInterval(resendTimer); otpStep.hidden = true; emailStep.hidden = false; setMessage('email-message'); emailInput.focus(); });
   document.querySelector('#resend-code')?.addEventListener('click', requestOtp);
-  async function route() { const hash = location.hash || '#home'; let authenticated = false; try { authenticated = (await api('/api/auth/me')).authenticated; } catch {} if (hash.startsWith('#app')) { if (!authenticated) { location.hash = '#login'; return route(); } marketing.hidden = true; auth.hidden = true; app.classList.add('is-visible'); showPage('dashboard'); return; } app.classList.remove('is-visible'); if (hash.startsWith('#login')) { marketing.hidden = true; auth.hidden = false; } else { auth.hidden = true; marketing.hidden = false; document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el)); } icons(); }
+  async function route() { const hash = location.hash || '#home'; let me; try { me = await api('/api/auth/me'); } catch {} if (hash.startsWith('#app')) { if (!me?.authenticated) { location.hash = '#login'; return route(); } applyIdentity(me.user.email); marketing.hidden = true; auth.hidden = true; app.classList.add('is-visible'); showPage('dashboard'); return; } app.classList.remove('is-visible'); if (hash.startsWith('#login')) { marketing.hidden = true; auth.hidden = false; } else { auth.hidden = true; marketing.hidden = false; document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el)); } icons(); }
+  document.querySelector('#dashboard')?.addEventListener('mousemove', event => { const rect = event.currentTarget.getBoundingClientRect(); event.currentTarget.style.setProperty('--mouse-x', `${event.clientX - rect.left}px`); event.currentTarget.style.setProperty('--mouse-y', `${event.clientY - rect.top}px`); });
   const revealObserver = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add('in-view'); }), { threshold: .14 });
   window.addEventListener('hashchange', route); route(); icons();
 });
