@@ -40,4 +40,4 @@ async function route(req, res) {
   try { const file = await readFile(join(root, pathname)); const types = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json' }; res.writeHead(200, { 'content-type': `${types[extname(pathname)] || 'application/octet-stream'}; charset=utf-8` }); res.end(file); } catch { json(res, 404, { error: 'Not found' }); }
 }
 setInterval(() => { const now = Date.now(); for (const [key, record] of sessions) if (now - record.createdAt > 14 * 24 * 60 * 60_000) sessions.delete(key); }, 60_000).unref();
-createServer((req, res) => route(req, res).catch(() => json(res, 500, { error: 'Unexpected server error' }))).listen(port, () => console.log(`JobCard running at ${origin}`));
+createServer((req, res) => route(req, res).catch(() => json(res, 500, { error: 'Unexpected server error' }))).listen(port, () => console.log(`Dispatch Draft running at ${origin}`));

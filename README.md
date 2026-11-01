@@ -1,6 +1,6 @@
-# JobCard
+# Dispatch Draft
 
-JobCard is a calm service-operations workspace for creating, sharing and reviewing job records.
+Dispatch Draft is a calm service-operations workspace for creating, sharing and reviewing job records.
 
 ## Run locally
 
