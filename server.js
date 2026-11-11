@@ -23,7 +23,7 @@ const body = req => new Promise((resolve, reject) => { let data = ''; req.on('da
 const rateLimit = (key, windowMs, limit) => { const now = Date.now(); const recent = (rateWindows.get(key) || []).filter(time => now - time < windowMs); if (recent.length >= limit) return false; recent.push(now); rateWindows.set(key, recent); return true; };
 const sessionFor = req => { const token = getCookies(req.headers.cookie).dispatch_session; return token ? sessions.get(token) : null; };
 const userJobs = userId => [...jobs.values()].filter(job => job.owner_id === userId).sort((a, b) => (b.service_date || '').localeCompare(a.service_date || '') || b.created_at.localeCompare(a.created_at));
-const publicUser = account => ({ id: account.id, email: account.email, display_name: account.display_name });
+const publicUser = account => ({ id: account.id, email: account.email, display_name: account.display_name, company_name: account.company_name || '', role: account.role || '', timezone: account.timezone || '', setup_completed: Boolean(account.company_name) });
 async function hashPassword(password, salt = randomBytes(16).toString('hex')) { const derived = await scrypt(password, salt, 64); return { salt, hash: Buffer.from(derived).toString('hex') }; }
 async function verifyPassword(password, account) { const derived = await scrypt(password, account.salt, 64); const expected = Buffer.from(account.password_hash, 'hex'); return expected.length === derived.length && timingSafeEqual(expected, derived); }
 function sendStream(userId, event, payload) { for (const stream of streams.get(userId) || []) stream.write('event: ' + event + '\\ndata: ' + JSON.stringify(payload) + '\\n\\n'); }
@@ -41,7 +41,7 @@ async function route(req, res) {
     if (!validatePassword(password)) return json(res, 400, { error: 'Password must have at least 8 characters and one uppercase character.' });
     if (accounts.has(email)) return json(res, 409, { error: 'An account already exists for this email. Sign in instead.' });
     const displayName = String(input.display_name || email.split('@')[0]).replace(/[._-]+/g, ' ').trim().replace(/\b\w/g, char => char.toUpperCase());
-    const credentials = await hashPassword(password); const account = { id: randomBytes(16).toString('hex'), email, display_name: displayName, ...credentials, created_at: new Date().toISOString() };
+    const credentials = await hashPassword(password); const account = { id: randomBytes(16).toString('hex'), email, display_name: displayName, company_name: '', role: '', timezone: '', ...credentials, created_at: new Date().toISOString() };
     accounts.set(email, account); const token = createSession(account);
     return json(res, 201, { ok: true, user: publicUser(account) }, { 'set-cookie': cookie('dispatch_session', token, 60 * 60 * 24 * 14) });
   }
@@ -53,6 +53,7 @@ async function route(req, res) {
     const token = createSession(account); return json(res, 200, { ok: true, user: publicUser(account) }, { 'set-cookie': cookie('dispatch_session', token, 60 * 60 * 24 * 14) });
   }
   if (url.pathname === '/api/auth/me' && req.method === 'GET') { const session = requireSession(req, res); if (!session) return; return json(res, 200, { authenticated: true, user: publicUser(accountFrom(session)) }); }
+  if (url.pathname === '/api/account' && req.method === 'PATCH') { const session = requireSession(req, res); if (!session) return; let input; try { input = await body(req); } catch { return json(res, 400, { error: 'Invalid account data.' }); } const account = accountFrom(session); const companyName = String(input.company_name || '').trim(); const displayName = String(input.display_name || '').trim(); if (companyName.length < 2) return json(res, 400, { error: 'Enter your company name.' }); if (displayName.length < 2) return json(res, 400, { error: 'Enter your name.' }); account.company_name = companyName.slice(0, 100); account.display_name = displayName.slice(0, 80); account.role = String(input.role || '').trim().slice(0, 80); account.timezone = String(input.timezone || '').trim().slice(0, 80); return json(res, 200, { ok: true, user: publicUser(account) }); }
   if (url.pathname === '/api/auth/logout' && req.method === 'POST') { const token = getCookies(req.headers.cookie).dispatch_session; if (token) sessions.delete(token); return json(res, 200, { ok: true }, { 'set-cookie': cookie('dispatch_session', '', 0) }); }
   if (url.pathname === '/api/jobs/stream' && req.method === 'GET') {
     const session = requireSession(req, res); if (!session) return; res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' }); res.write('event: ready\\ndata: {}\\n\\n'); const list = streams.get(session.user_id) || []; list.push(res); streams.set(session.user_id, list); req.on('close', () => streams.set(session.user_id, (streams.get(session.user_id) || []).filter(stream => stream !== res))); return;
